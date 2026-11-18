@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>벼 디지털 트윈 · 유전자 설계 시뮬레이터</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>🌾 벼 디지털 트윈 · 유전자 설계 시뮬레이터</h1>
+  <p>카테고리별 유전자를 골라 계통을 설계하고, 기준 품종(왼쪽)과 나란히 키워 보세요. 잎·줄기·이삭에 마우스를 올리면 설명이 나와요.</p>
+</header>
+<div class="app">
+  <div class="stage">
+    <div id="view">
+      <div class="hud">
+        <div class="day" id="hudDay">0일차</div>
+        <div class="stg" id="hudStage">이앙 직후</div>
+        <div class="sub" id="hudSub"></div>
+      </div>
+      <div class="hint">마우스를 잎·줄기·이삭에 올려 보세요 · 드래그: 회전 · 휠: 확대</div>
+      <div id="tip"></div>
+    </div>
+    <div class="timeline">
+      <div class="tl-row">
+        <button class="play" id="play" title="재생">▶</button>
+        <div class="tl-wrap">
+          <input type="range" id="day" min="0" max="200" step="0.5" value="0">
+          <div class="markers" id="markers"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <h2>① 유전자 설계 <small>카테고리별로 골라 조합하기</small></h2>
+    <div id="categories"></div>
+
+    <h2>② 재배 환경</h2>
+    <div class="ctrl">
+      <label><span>평균 기온</span><b id="tVal">25 °C</b></label>
+      <input type="range" id="temp" min="15" max="36" step="0.5" value="25">
+    </div>
+    <div class="ctrl">
+      <label><span>일장 (낮 길이)</span><b id="dlVal">14.0 시간</b></label>
+      <input type="range" id="dl" min="10.5" max="15" step="0.25" value="14">
+    </div>
+    <div class="ctrl">
+      <label><span>질소 비료</span></label>
+      <div class="seg" id="nitro">
+        <button data-n="0">적게</button><button data-n="1" class="on">보통</button><button data-n="2">많이</button>
+      </div>
+    </div>
+    <label class="toggle"><input type="checkbox" id="compare" checked> 기준 품종과 나란히 보기</label>
+
+    <h2>③ 결과 비교 <small>성숙기 기준 예측값</small></h2>
+    <table id="results"></table>
+
+    <h2>④ 낟알 모양 <small>현미, 실제 비율</small></h2>
+    <canvas id="grainCanvas"></canvas>
+    <div id="grainInfo"></div>
+
+    <h2>⑤ 생장 곡선</h2>
+    <canvas class="chart" id="chH"></canvas>
+    <canvas class="chart" id="chT"></canvas>
+    <div class="legend"><span class="lw">기준 품종</span><span class="lk">설계 계통</span></div>
+
+    <h2>⑥ 해석</h2>
+    <div class="expl" id="expl"></div>
+
+    <details>
+      <summary>모델은 어떻게 계산하나요?</summary>
+      <p><b>1. 적산온도.</b> 하루 GDD = <code>min(기온,35) − 10</code>을 날마다 더해 발달 단계를 정해요.</p>
+      <p><b>2. 출수.</b> 단일 조건 출수 GDD는 1150이고, 낮이 12.5시간보다 1시간 길어질 때마다 280 GDD씩 늦어져요. 유수형성은 출수 450 GDD 전, 성숙은 520 GDD 후예요.</p>
+      <p><b>3. 초장과 분얼.</b> 로지스틱 곡선을 써요. 분얼은 유수형성에서 멈추고 일부가 죽어요.</p>
+      <p><b>4. 낟알.</b> 천립중은 <code>25 g × 길이비 × 폭비^1.2</code>로 계산해요.</p>
+      <p><b>5. 수량.</b> 이삭 수 × 이삭당 낟알 × 등숙률 × 천립중이에요. 잎과 줄기가 공급할 수 있는 탄수화물에는 한계(<code>기준 잠재수량 × 1.25</code>)가 있어서, 이를 넘으면 등숙률이 떨어져요.</p>
+      <p><b>근거 수준.</b> <span class="ev ev-실측">실측</span> 해당 유전자 논문의 수치 · <span class="ev ev-대리값">대리값</span> 같은 경로 유전자의 수치 · <span class="ev ev-추정">추정</span> 관련 근거로 정한 값 · <span class="ev ev-방향만">방향만</span> 증감 방향만 확인.</p>
+    </details>
+    <p class="disc">※ 교육용 규칙 기반 모델이에요. 계수는 각 카드의 논문을 바탕으로 했지만 품종 배경과 재배 환경이 논문마다 달라요. 유전자 조합의 효과는 단순 곱셈으로 가정했어요.</p>
+  </aside>
+</div>
+
+<!-- 외부 라이브러리 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<!-- 프로젝트 코드: 이 순서대로 불러와야 해요 -->
+<script src="js/genes.js"></script>
+<script src="js/model.js"></script>
+<script src="js/plant3d.js"></script>
+<script src="js/grain2d.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
